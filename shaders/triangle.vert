@@ -1,23 +1,27 @@
 #version 450
 
-layout(location = 0) out vec3 outColor;
+struct vertex {
+    vec4 position;
+    vec4 color;
+};
+
+layout(std430, binding = 0) readonly buffer VertexBuffer {
+    vertex vertices[];
+};
+
+layout(std430, binding = 1) readonly buffer IndexBuffer {
+    uint indices[];
+};
+
+layout(location = 0) out vec4 outColor;
 
 void main()
 {
-    vec2 positions[3] = vec2[](
-        vec2( -0.5, -0.5),
-        vec2( 0.5,  -0.5),
-        vec2(0.0,  0.5)
-    );
+    uint index = indices[gl_VertexIndex];
 
-    vec3 colors[3] = vec3[](
-        vec3(1.0, 0.0, 0.0),
-        vec3(0.0, 1.0, 0.0),
-        vec3(0.0, 0.0, 1.0)
-    );
+    vertex v = vertices[index];
 
-    int i = gl_VertexIndex;
+    gl_Position = v.position;
 
-    gl_Position = vec4(positions[i], 0.0, 1.0);
-    outColor = colors[i];
+    outColor = v.color;
 }
