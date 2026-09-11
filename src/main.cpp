@@ -40,6 +40,11 @@ static SDL_GPUShader *LoadShader(
 }
 
 int main(void) {
+
+    //============|
+    // Init begin |
+    //============|
+
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::cerr << "Failed to init SDL\n";
         return 1;
@@ -70,6 +75,11 @@ int main(void) {
         SDL_Quit();
         return 1;
     }
+
+    //================|
+    // Init end       |
+    // Pipeline begin |
+    //================|
 
     SDL_GPUShader* vert = LoadShader(device, "shaders/triangle.vert.spv", SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 0, 0);
     SDL_GPUShader* frag = LoadShader(device, "shaders/triangle.frag.spv", SDL_GPU_SHADERSTAGE_FRAGMENT, 0, 0, 0, 0);
@@ -112,9 +122,19 @@ int main(void) {
         return 1;
     }
 
+    //===================|
+    // Pipeline end      |
+    // Render loop begin |
+    //===================|
+
     bool running = true;
 
     while (running) {
+
+        //==============|
+        // Update begin |
+        //==============|
+
         SDL_Event event;
 
         while (SDL_PollEvent(&event)) {
@@ -123,11 +143,21 @@ int main(void) {
             }
         }
 
+        //==========================|
+        // Update end               |
+        // Get command buffer begin |
+        //==========================|
+
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
         if (cmd == nullptr) {
             std::cerr << "Failed to acquire gpu command buffer\n";
             break;
         }
+
+        //=============================|
+        // Get command buffer end      | 
+        // Get swapchain texture begin |
+        //=============================|
 
         SDL_GPUTexture* swapchainTexture = nullptr;
         uint32_t width = 0;
@@ -144,6 +174,11 @@ int main(void) {
             SDL_CancelGPUCommandBuffer(cmd);
             continue;
         }
+
+        //===========================|
+        // Get swapchain texture end |
+        // Render pass begin         |
+        //===========================|
 
         SDL_GPUColorTargetInfo colorTarget{};
 
@@ -165,12 +200,22 @@ int main(void) {
 
         SDL_EndGPURenderPass(pass);
 
+        //=================|
+        // Render pass end |
+        //=================|
+
+        // Submit the commands to the gpu
         if (!SDL_SubmitGPUCommandBuffer(cmd)) {
             std::cerr << "Failed to submit gpu command buffer\n";
 
             break;
         }
     }
+
+    //=================|
+    // Render loop end |
+    // Cleanup begin   |
+    //=================|
 
     SDL_WaitForGPUIdle(device);
 
