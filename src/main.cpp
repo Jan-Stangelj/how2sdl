@@ -1,6 +1,5 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_gpu.h"
-#include "SDL3/SDL_stdinc.h"
 
 #include <cstdint>
 #include <iostream>
@@ -10,20 +9,20 @@ struct vertex {
     float color[4];
 };
 
-static SDL_GPUShader *LoadShader(
+SDL_GPUShader* LoadShader(
     SDL_GPUDevice *device,
     const char *filename,
     SDL_GPUShaderStage stage,
     Uint32 num_samplers,
     Uint32 num_storage_textures,
     Uint32 num_storage_buffers,
-    Uint32 num_uniform_buffers
-)
-{
+    Uint32 num_uniform_buffers) {
+
     size_t size = 0;
 
     void *code = SDL_LoadFile(filename, &size);
-    if (!code) {
+    if (code == NULL) {
+        std::cerr << "Failed to read shader from file: " << SDL_GetError() << '\n';
         return nullptr;
     }
 
@@ -40,6 +39,11 @@ static SDL_GPUShader *LoadShader(
     info.num_uniform_buffers = num_uniform_buffers;
 
     SDL_GPUShader *shader = SDL_CreateGPUShader(device, &info);
+    if (shader == NULL) {
+        std::cerr << "Failed to create GPU shader: " << SDL_GetError() << '\n';
+        SDL_free(code);
+        return nullptr;
+    }
 
     SDL_free(code);
 
@@ -53,30 +57,27 @@ int main(void) {
     //============|
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
-        std::cerr << "Failed to init SDL\n";
+        std::cerr << "Failed to init SDL: " << SDL_GetError() << "\n";
         return 1;
     }
 
     SDL_Window* window = SDL_CreateWindow("how2sdl", 800, 600, 0);
-    if (window == nullptr) {
-        std::cerr << "Failed to create window\n";
+    if (window == NULL) {
+        std::cerr << "Failed to create window: " << SDL_GetError() << '\n';
         SDL_Quit();
         return 1;
     }
 
-    SDL_GPUDevice* device = SDL_CreateGPUDevice(
-        SDL_GPU_SHADERFORMAT_SPIRV,
-        true,
-        "vulkan"
-    );
+    SDL_GPUDevice* device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, "vulkan");
     if (device == nullptr) {
-        std::cerr << "Failed to create gpu device\n";
+        std::cerr << "Failed to create GPU device: " << SDL_GetError() << '\n';
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
     }
 
     if (!SDL_ClaimWindowForGPUDevice(device, window)) {
+        std::cerr << "Failed to claim window for GPU device: " << SDL_GetError() << '\n';
         SDL_DestroyGPUDevice(device);
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -128,12 +129,27 @@ int main(void) {
     vertexBufferInfo.size = sizeof(vertices);
 
     SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(device, &vertexBufferInfo);
+    if (vertexBuffer == NULL) {
+        std::cerr << "Failed to create vertex GPU buffer: " << SDL_GetError() << '\n';
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
 
     SDL_GPUBufferCreateInfo indexBufferInfo{};
     indexBufferInfo.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
     indexBufferInfo.size = sizeof(indices);
 
     SDL_GPUBuffer* indexBuffer = SDL_CreateGPUBuffer(device, &indexBufferInfo);
+    if (indexBuffer == NULL) {
+        std::cerr << "Failed to create index GPU buffer: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
 
     // copy data to transfer buffer
 
@@ -142,8 +158,27 @@ int main(void) {
     transferInfo.size = sizeof(vertices) + sizeof(indices);
 
     SDL_GPUTransferBuffer* transferBuffer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+    if (transferBuffer == NULL) {
+        std::cerr << "Failed to create GPU transfer buffer: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
 
     void* data = SDL_MapGPUTransferBuffer(device, transferBuffer, false);
+    if (data == NULL) {
+        std::cerr << "Failed to map GPU transfer buffer: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
 
     SDL_memcpy(data, vertices, sizeof(vertices));
     SDL_memcpy((uint8_t*)data + sizeof(vertices), indices, sizeof(indices));
@@ -153,6 +188,16 @@ int main(void) {
     // upload from transfer buffer to the gpu
 
     SDL_GPUCommandBuffer* uploadCmd = SDL_AcquireGPUCommandBuffer(device);
+    if (uploadCmd == NULL) {
+        std::cerr << "Failed to acquire gpu upload command buffer: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
 
     SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(uploadCmd);
 
@@ -181,8 +226,18 @@ int main(void) {
     SDL_UploadToGPUBuffer(copyPass, &indexSource, &indexDestination, false);
 
     SDL_EndGPUCopyPass(copyPass);
-    SDL_SubmitGPUCommandBuffer(uploadCmd);
-    SDL_WaitForGPUIdle(device);
+    if (!SDL_SubmitGPUCommandBuffer(uploadCmd)) {
+        std::cerr << "Failed to submit upload GPU command buffer: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+    if (!SDL_WaitForGPUIdle(device))
+        std::cerr << "Failed to wait for GPU idle: " << SDL_GetError() << '\n';
     SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
 
     //================|
@@ -198,6 +253,9 @@ int main(void) {
 
         if (vert) SDL_ReleaseGPUShader(device, vert);
         if (frag) SDL_ReleaseGPUShader(device, frag);
+
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
 
         SDL_DestroyGPUDevice(device);
         SDL_DestroyWindow(window);
@@ -222,9 +280,10 @@ int main(void) {
     SDL_ReleaseGPUShader(device, vert);
     SDL_ReleaseGPUShader(device, frag);
 
-    if (pipeline == nullptr) {
-        std::cerr << "Failed to create graphics pipeline\n";
-
+    if (pipeline == NULL) {
+        std::cerr << "Failed to create graphics pipeline: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
         SDL_DestroyGPUDevice(device);
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -237,12 +296,13 @@ int main(void) {
     //===================|
 
     bool running = true;
+    int exitCode = 0;
 
     while (running) {
 
-        //==============|
-        // Update begin |
-        //==============|
+        //=============|
+        // Input begin |
+        //=============|
 
         SDL_Event event;
 
@@ -253,13 +313,14 @@ int main(void) {
         }
 
         //==========================|
-        // Update end               |
+        // Input end                |
         // Get command buffer begin |
         //==========================|
 
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
         if (cmd == nullptr) {
-            std::cerr << "Failed to acquire gpu command buffer\n";
+            std::cerr << "Failed to acquire gpu command buffer: " << SDL_GetError() << '\n';
+            exitCode = 1;
             break;
         }
 
@@ -273,13 +334,12 @@ int main(void) {
         uint32_t height = 0;
 
         if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmd, window, &swapchainTexture, &width, &height)) {
-            std::cerr << "Failed to acquire gpu swapchain texture\n";
+            std::cerr << "Failed to acquire gpu swapchain texture: " << SDL_GetError() << '\n';
             SDL_CancelGPUCommandBuffer(cmd);
+            exitCode = 1;
             break;
         }
-
-        if (swapchainTexture == nullptr) {
-            std::cerr << "Swapchain texture dosen't exist\n";
+        if (swapchainTexture == NULL) {
             SDL_CancelGPUCommandBuffer(cmd);
             continue;
         }
@@ -319,8 +379,8 @@ int main(void) {
 
         // Submit the commands to the gpu
         if (!SDL_SubmitGPUCommandBuffer(cmd)) {
-            std::cerr << "Failed to submit gpu command buffer\n";
-
+            std::cerr << "Failed to submit gpu command buffer: " << SDL_GetError() << '\n';
+            exitCode = 1;
             break;
         }
     }
@@ -341,5 +401,5 @@ int main(void) {
     SDL_DestroyWindow(window);
     SDL_Quit();
 
-    return 0;
+    return exitCode;
 }
