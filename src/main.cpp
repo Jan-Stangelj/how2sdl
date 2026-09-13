@@ -1,10 +1,6 @@
 #include "SDL3/SDL.h"
-#include "SDL3/SDL_error.h"
 #include "SDL3/SDL_gpu.h"
 
-#include "SDL3/SDL_pixels.h"
-#include "SDL3/SDL_stdinc.h"
-#include "SDL3/SDL_surface.h"
 #include "SDL3_image/SDL_image.h"
 
 #include <cstdint>
@@ -202,6 +198,7 @@ int main(void) {
         SDL_DestroyGPUDevice(device);
         SDL_DestroyWindow(window);
         SDL_Quit();
+        return 1;
     }
 
     SDL_GPUSamplerCreateInfo samplerInfo{};
@@ -239,6 +236,8 @@ int main(void) {
     SDL_GPUTransferBuffer* transferBuffer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
     if (transferBuffer == NULL) {
         std::cerr << "Failed to create GPU transfer buffer: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_DestroySurface(rgbaSurface);
         SDL_ReleaseGPUBuffer(device, vertexBuffer);
         SDL_ReleaseGPUBuffer(device, indexBuffer);
         SDL_ReleaseGPUTexture(device, texture);
@@ -251,6 +250,8 @@ int main(void) {
     void* data = SDL_MapGPUTransferBuffer(device, transferBuffer, false);
     if (data == NULL) {
         std::cerr << "Failed to map GPU transfer buffer: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_DestroySurface(rgbaSurface);
         SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
         SDL_ReleaseGPUBuffer(device, vertexBuffer);
         SDL_ReleaseGPUBuffer(device, indexBuffer);
@@ -272,6 +273,8 @@ int main(void) {
     SDL_GPUCommandBuffer* uploadCmd = SDL_AcquireGPUCommandBuffer(device);
     if (uploadCmd == NULL) {
         std::cerr << "Failed to acquire gpu upload command buffer: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_DestroySurface(rgbaSurface);
         SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
         SDL_ReleaseGPUBuffer(device, vertexBuffer);
         SDL_ReleaseGPUBuffer(device, indexBuffer);
@@ -335,6 +338,9 @@ int main(void) {
     SDL_EndGPUCopyPass(copyPass);
     if (!SDL_SubmitGPUCommandBuffer(uploadCmd)) {
         std::cerr << "Failed to submit upload GPU command buffer: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_DestroySurface(rgbaSurface);
+        SDL_ReleaseGPUTexture(device, texture);
         SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
         SDL_ReleaseGPUBuffer(device, vertexBuffer);
         SDL_ReleaseGPUBuffer(device, indexBuffer);
@@ -360,6 +366,10 @@ int main(void) {
 
         if (vert) SDL_ReleaseGPUShader(device, vert);
         if (frag) SDL_ReleaseGPUShader(device, frag);
+
+        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_DestroySurface(rgbaSurface);
+        SDL_ReleaseGPUTexture(device, texture);
 
         SDL_ReleaseGPUBuffer(device, vertexBuffer);
         SDL_ReleaseGPUBuffer(device, indexBuffer);
@@ -389,6 +399,9 @@ int main(void) {
 
     if (pipeline == NULL) {
         std::cerr << "Failed to create graphics pipeline: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_DestroySurface(rgbaSurface);
+        SDL_ReleaseGPUTexture(device, texture);
         SDL_ReleaseGPUBuffer(device, vertexBuffer);
         SDL_ReleaseGPUBuffer(device, indexBuffer);
         SDL_DestroyGPUDevice(device);
