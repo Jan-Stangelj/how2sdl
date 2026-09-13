@@ -1,12 +1,19 @@
 #include "SDL3/SDL.h"
+#include "SDL3/SDL_error.h"
 #include "SDL3/SDL_gpu.h"
+
+#include "SDL3/SDL_pixels.h"
+#include "SDL3/SDL_stdinc.h"
+#include "SDL3/SDL_surface.h"
+#include "SDL3_image/SDL_image.h"
 
 #include <cstdint>
 #include <iostream>
 
 struct vertex {
     float position[4];
-    float color[4];
+    float uv[2];
+    float pad[2] = {0.0f, 0.0f};
 };
 
 SDL_GPUShader* LoadShader(
@@ -95,25 +102,25 @@ int main(void) {
         // Bottom-left
         {
             { -0.7f, -0.7f, 0.0f, 1.0f },
-            {  1.0f,  0.0f, 0.0f, 1.0f }
+            {  0.0f,  1.0f }
         },
 
         // Bottom-right
         {
             {  0.7f, -0.7f, 0.0f, 1.0f },
-            {  0.0f,  1.0f, 0.0f, 1.0f }
+            {  1.0f,  1.0f }
         },
 
         // Top-right
         {
             {  0.7f,  0.7f, 0.0f, 1.0f },
-            {  0.0f,  0.0f, 1.0f, 1.0f }
+            {  1.0f,  0.0f }
         },
 
         // Top-left
         {
             { -0.7f,  0.7f, 0.0f, 1.0f },
-            {  1.0f,  1.0f, 0.0f, 1.0f }
+            {  0.0f,  0.0f }
         }
     };
 
@@ -121,8 +128,6 @@ int main(void) {
         0, 1, 2,
         2, 0, 3
     };
-
-    // create buffers
 
     SDL_GPUBufferCreateInfo vertexBufferInfo{};
     vertexBufferInfo.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
@@ -151,17 +156,92 @@ int main(void) {
         return 1;
     }
 
-    // copy data to transfer buffer
+    //===============|
+    // Buffers end   |
+    // Texture begin |
+    //===============|
+
+    SDL_Surface* surface = IMG_Load("../assets/textures/texture.jpg");
+    if (surface == NULL) {
+        std::cerr << "Failed to load image: " << SDL_GetError() << '\n';
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+
+    SDL_Surface* rgbaSurface = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+    SDL_DestroySurface(surface);
+    if (rgbaSurface == NULL) {
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+
+    SDL_GPUTextureCreateInfo textureInfo{};
+    textureInfo.type = SDL_GPU_TEXTURETYPE_2D;
+    textureInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    textureInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    textureInfo.width = rgbaSurface->w;
+    textureInfo.height = rgbaSurface->h;
+    textureInfo.layer_count_or_depth = 1;
+    textureInfo.num_levels = 1;
+    textureInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
+
+    SDL_GPUTexture* texture = SDL_CreateGPUTexture(device, &textureInfo);
+    if (texture == NULL) {
+        std::cerr << "Failed to create GPU texture: " << SDL_GetError() << '\n';
+        SDL_DestroySurface(rgbaSurface);
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+    }
+
+    SDL_GPUSamplerCreateInfo samplerInfo{};
+    samplerInfo.min_filter = SDL_GPU_FILTER_LINEAR;
+    samplerInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
+
+    samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+
+    samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    samplerInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+
+    SDL_GPUSampler* sampler = SDL_CreateGPUSampler(device, &samplerInfo);
+    if (sampler == NULL) {
+        std::cerr << "Failed to create GPU sampler: " << SDL_GetError() << '\n';
+        SDL_DestroySurface(rgbaSurface);
+        SDL_ReleaseGPUTexture(device, texture);
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+
+    //================|
+    // Texture end    |
+    // Upload begin   |
+    //================|
 
     SDL_GPUTransferBufferCreateInfo transferInfo{};
     transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    transferInfo.size = sizeof(vertices) + sizeof(indices);
+    transferInfo.size = sizeof(vertices) + sizeof(indices) + (rgbaSurface->w * rgbaSurface->h * 4);
 
     SDL_GPUTransferBuffer* transferBuffer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
     if (transferBuffer == NULL) {
         std::cerr << "Failed to create GPU transfer buffer: " << SDL_GetError() << '\n';
         SDL_ReleaseGPUBuffer(device, vertexBuffer);
         SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_ReleaseGPUTexture(device, texture);
         SDL_DestroyGPUDevice(device);
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -174,6 +254,7 @@ int main(void) {
         SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
         SDL_ReleaseGPUBuffer(device, vertexBuffer);
         SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_ReleaseGPUTexture(device, texture);
         SDL_DestroyGPUDevice(device);
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -182,6 +263,7 @@ int main(void) {
 
     SDL_memcpy(data, vertices, sizeof(vertices));
     SDL_memcpy((uint8_t*)data + sizeof(vertices), indices, sizeof(indices));
+    SDL_memcpy((uint8_t*)data + sizeof(vertices) + sizeof(indices), rgbaSurface->pixels, rgbaSurface->w * rgbaSurface->h * 4);
 
     SDL_UnmapGPUTransferBuffer(device, transferBuffer);
 
@@ -193,6 +275,7 @@ int main(void) {
         SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
         SDL_ReleaseGPUBuffer(device, vertexBuffer);
         SDL_ReleaseGPUBuffer(device, indexBuffer);
+        SDL_ReleaseGPUTexture(device, texture);
         SDL_DestroyGPUDevice(device);
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -225,6 +308,30 @@ int main(void) {
 
     SDL_UploadToGPUBuffer(copyPass, &indexSource, &indexDestination, false);
 
+    // texture
+    SDL_GPUTextureTransferInfo textureSource{};
+
+    textureSource.transfer_buffer = transferBuffer;
+    textureSource.offset = sizeof(vertices) + sizeof(indices);
+    textureSource.pixels_per_row = rgbaSurface->w;
+    textureSource.rows_per_layer = rgbaSurface->h;
+
+    SDL_GPUTextureRegion textureDestination{};
+
+    textureDestination.texture = texture;
+    textureDestination.mip_level = 0;
+    textureDestination.layer = 0;
+
+    textureDestination.x = 0;
+    textureDestination.y = 0;
+    textureDestination.z = 0;
+
+    textureDestination.w = rgbaSurface->w;
+    textureDestination.h = rgbaSurface->h;
+    textureDestination.d = 1;
+
+    SDL_UploadToGPUTexture(copyPass, &textureSource, &textureDestination, false);
+
     SDL_EndGPUCopyPass(copyPass);
     if (!SDL_SubmitGPUCommandBuffer(uploadCmd)) {
         std::cerr << "Failed to submit upload GPU command buffer: " << SDL_GetError() << '\n';
@@ -241,12 +348,12 @@ int main(void) {
     SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
 
     //================|
-    // Buffers end    |
+    // Upload end     |
     // Pipeline begin |
     //================|
 
     SDL_GPUShader* vert = LoadShader(device, "shaders/triangle.vert.spv", SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 2, 0);
-    SDL_GPUShader* frag = LoadShader(device, "shaders/triangle.frag.spv", SDL_GPU_SHADERSTAGE_FRAGMENT, 0, 0, 0, 0);
+    SDL_GPUShader* frag = LoadShader(device, "shaders/triangle.frag.spv", SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0, 0, 0);
 
     if (vert == nullptr || frag == nullptr) {
         std::cerr << "Failed to load shaders\n";
@@ -369,6 +476,12 @@ int main(void) {
         SDL_GPUBuffer* storageBuffers[] = { vertexBuffer, indexBuffer };
         SDL_BindGPUVertexStorageBuffers(pass, 0, storageBuffers, 2);
 
+        // bind texture and sampler
+        SDL_GPUTextureSamplerBinding textureBinding{};
+        textureBinding.texture = texture;
+        textureBinding.sampler = sampler;
+        SDL_BindGPUFragmentSamplers(pass, 0, &textureBinding, 1);
+
         SDL_DrawGPUPrimitives(pass, 6, 1, 0, 0);
 
         SDL_EndGPURenderPass(pass);
@@ -391,6 +504,10 @@ int main(void) {
     //=================|
 
     SDL_WaitForGPUIdle(device);
+
+    SDL_DestroySurface(rgbaSurface);
+    SDL_ReleaseGPUTexture(device, texture);
+    SDL_ReleaseGPUSampler(device, sampler);
 
     SDL_ReleaseGPUBuffer(device, vertexBuffer);
     SDL_ReleaseGPUBuffer(device, indexBuffer);

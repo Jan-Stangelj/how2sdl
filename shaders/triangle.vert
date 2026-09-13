@@ -2,7 +2,8 @@
 
 struct vertex {
     vec4 position;
-    vec4 color;
+    vec2 uv;
+    vec2 pad;
 };
 
 layout(std430, binding = 0) readonly buffer VertexBuffer {
@@ -13,15 +14,12 @@ layout(std430, binding = 1) readonly buffer IndexBuffer {
     uint indices[];
 };
 
-layout(location = 0) out vec4 outColor;
+layout(location = 0) out vec2 uv;
 
-void main()
-{
+void main() {
     uint index = indices[gl_VertexIndex];
-
     vertex v = vertices[index];
 
     gl_Position = v.position;
-
-    outColor = v.color;
+    uv = v.uv;
 }

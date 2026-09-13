@@ -4,16 +4,27 @@ project("how2sdl" LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED On)
 
-# Build SDL as a static library
+# SDL3
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 
-# Doint build stuff we dont need
-set(SDL_TEST OFF CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+set(SDL_UNINSTALL OFF CACHE BOOL "" FORCE)
 
-add_subdirectory("vendor/sdl")
+add_subdirectory("vendor/sdl" EXCLUDE_FROM_ALL)
+
+# SDL3_image
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+set(SDLIMAGE_DEPS_SHARED OFF CACHE BOOL "" FORCE)
+
+set(SDL3IMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_TESTS OFF CACHE BOOL "" FORCE)
+
+add_subdirectory("vendor/sdl_image" EXCLUDE_FROM_ALL)
 
 file(GLOB_RECURSE "SOURCES" CONFIGURE_DEPENDS "src/*.cpp")
 add_executable("how2sdl" "${SOURCES}")
@@ -29,7 +40,7 @@ endif()
 
 target_include_directories("how2sdl" PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
-target_link_libraries("how2sdl" PRIVATE SDL3::SDL3-static)
+target_link_libraries("how2sdl" PRIVATE SDL3::SDL3-static SDL3_image::SDL3_image-static)
 
 # Compile the shaders
 find_program(GLSLC glslc REQUIRED)
