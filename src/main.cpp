@@ -71,7 +71,7 @@ int main(void) {
         return 1;
     }
 
-    SDL_GPUDevice* device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, "vulkan");
+    SDL_GPUDevice* device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, NULL);
     if (device == nullptr) {
         std::cerr << "Failed to create GPU device: " << SDL_GetError() << '\n';
         SDL_DestroyWindow(window);
