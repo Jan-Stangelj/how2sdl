@@ -38,6 +38,9 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   target_compile_options(how2sdl PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+
+# hello nigga
+
 target_include_directories("how2sdl" PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 target_link_libraries("how2sdl" PRIVATE SDL3::SDL3-static SDL3_image::SDL3_image-static)

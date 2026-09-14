@@ -3,6 +3,8 @@
 
 #include "SDL3_image/SDL_image.h"
 
+#include "window.hpp"
+
 #include <cstdint>
 #include <iostream>
 
@@ -59,33 +61,9 @@ int main(void) {
     // Init begin |
     //============|
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        std::cerr << "Failed to init SDL: " << SDL_GetError() << "\n";
-        return 1;
-    }
+    how2sdl::init();
 
-    SDL_Window* window = SDL_CreateWindow("how2sdl", 800, 600, 0);
-    if (window == NULL) {
-        std::cerr << "Failed to create window: " << SDL_GetError() << '\n';
-        SDL_Quit();
-        return 1;
-    }
-
-    SDL_GPUDevice* device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, NULL);
-    if (device == nullptr) {
-        std::cerr << "Failed to create GPU device: " << SDL_GetError() << '\n';
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
-    }
-
-    if (!SDL_ClaimWindowForGPUDevice(device, window)) {
-        std::cerr << "Failed to claim window for GPU device: " << SDL_GetError() << '\n';
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
-    }
+    how2sdl::window window(800, 600, "how2sdl", false);
 
     //===============|
     // Init end      |
@@ -129,12 +107,10 @@ int main(void) {
     vertexBufferInfo.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
     vertexBufferInfo.size = sizeof(vertices);
 
-    SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(device, &vertexBufferInfo);
+    SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(window.device, &vertexBufferInfo);
     if (vertexBuffer == NULL) {
         std::cerr << "Failed to create vertex GPU buffer: " << SDL_GetError() << '\n';
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        how2sdl::quit();
         return 1;
     }
 
@@ -142,13 +118,11 @@ int main(void) {
     indexBufferInfo.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
     indexBufferInfo.size = sizeof(indices);
 
-    SDL_GPUBuffer* indexBuffer = SDL_CreateGPUBuffer(device, &indexBufferInfo);
+    SDL_GPUBuffer* indexBuffer = SDL_CreateGPUBuffer(window.device, &indexBufferInfo);
     if (indexBuffer == NULL) {
         std::cerr << "Failed to create index GPU buffer: " << SDL_GetError() << '\n';
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        how2sdl::quit();
         return 1;
     }
 
@@ -160,22 +134,18 @@ int main(void) {
     SDL_Surface* surface = IMG_Load("../assets/textures/texture.jpg");
     if (surface == NULL) {
         std::cerr << "Failed to load image: " << SDL_GetError() << '\n';
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_ReleaseGPUBuffer(device, indexBuffer);
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(window.device, indexBuffer);
+        how2sdl::quit();
         return 1;
     }
 
     SDL_Surface* rgbaSurface = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
     SDL_DestroySurface(surface);
     if (rgbaSurface == NULL) {
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_ReleaseGPUBuffer(device, indexBuffer);
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(window.device, indexBuffer);
+        how2sdl::quit();
         return 1;
     }
 
@@ -189,15 +159,13 @@ int main(void) {
     textureInfo.num_levels = 1;
     textureInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
 
-    SDL_GPUTexture* texture = SDL_CreateGPUTexture(device, &textureInfo);
+    SDL_GPUTexture* texture = SDL_CreateGPUTexture(window.device, &textureInfo);
     if (texture == NULL) {
         std::cerr << "Failed to create GPU texture: " << SDL_GetError() << '\n';
         SDL_DestroySurface(rgbaSurface);
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_ReleaseGPUBuffer(device, indexBuffer);
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(window.device, indexBuffer);
+        how2sdl::quit();
         return 1;
     }
 
@@ -211,16 +179,14 @@ int main(void) {
     samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
     samplerInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
 
-    SDL_GPUSampler* sampler = SDL_CreateGPUSampler(device, &samplerInfo);
+    SDL_GPUSampler* sampler = SDL_CreateGPUSampler(window.device, &samplerInfo);
     if (sampler == NULL) {
         std::cerr << "Failed to create GPU sampler: " << SDL_GetError() << '\n';
         SDL_DestroySurface(rgbaSurface);
-        SDL_ReleaseGPUTexture(device, texture);
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_ReleaseGPUBuffer(device, indexBuffer);
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUTexture(window.device, texture);
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(window.device, indexBuffer);
+        how2sdl::quit();
         return 1;
     }
 
@@ -233,32 +199,28 @@ int main(void) {
     transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
     transferInfo.size = sizeof(vertices) + sizeof(indices) + (rgbaSurface->w * rgbaSurface->h * 4);
 
-    SDL_GPUTransferBuffer* transferBuffer = SDL_CreateGPUTransferBuffer(device, &transferInfo);
+    SDL_GPUTransferBuffer* transferBuffer = SDL_CreateGPUTransferBuffer(window.device, &transferInfo);
     if (transferBuffer == NULL) {
         std::cerr << "Failed to create GPU transfer buffer: " << SDL_GetError() << '\n';
-        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_ReleaseGPUSampler(window.device, sampler);
         SDL_DestroySurface(rgbaSurface);
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_ReleaseGPUBuffer(device, indexBuffer);
-        SDL_ReleaseGPUTexture(device, texture);
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(window.device, indexBuffer);
+        SDL_ReleaseGPUTexture(window.device, texture);
+        how2sdl::quit();
         return 1;
     }
 
-    void* data = SDL_MapGPUTransferBuffer(device, transferBuffer, false);
+    void* data = SDL_MapGPUTransferBuffer(window.device, transferBuffer, false);
     if (data == NULL) {
         std::cerr << "Failed to map GPU transfer buffer: " << SDL_GetError() << '\n';
-        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_ReleaseGPUSampler(window.device, sampler);
         SDL_DestroySurface(rgbaSurface);
-        SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_ReleaseGPUBuffer(device, indexBuffer);
-        SDL_ReleaseGPUTexture(device, texture);
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUTransferBuffer(window.device, transferBuffer);
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(window.device, indexBuffer);
+        SDL_ReleaseGPUTexture(window.device, texture);
+        how2sdl::quit();
         return 1;
     }
 
@@ -266,22 +228,20 @@ int main(void) {
     SDL_memcpy((uint8_t*)data + sizeof(vertices), indices, sizeof(indices));
     SDL_memcpy((uint8_t*)data + sizeof(vertices) + sizeof(indices), rgbaSurface->pixels, rgbaSurface->w * rgbaSurface->h * 4);
 
-    SDL_UnmapGPUTransferBuffer(device, transferBuffer);
+    SDL_UnmapGPUTransferBuffer(window.device, transferBuffer);
 
     // upload from transfer buffer to the gpu
 
-    SDL_GPUCommandBuffer* uploadCmd = SDL_AcquireGPUCommandBuffer(device);
+    SDL_GPUCommandBuffer* uploadCmd = SDL_AcquireGPUCommandBuffer(window.device);
     if (uploadCmd == NULL) {
         std::cerr << "Failed to acquire gpu upload command buffer: " << SDL_GetError() << '\n';
-        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_ReleaseGPUSampler(window.device, sampler);
         SDL_DestroySurface(rgbaSurface);
-        SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_ReleaseGPUBuffer(device, indexBuffer);
-        SDL_ReleaseGPUTexture(device, texture);
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUTransferBuffer(window.device, transferBuffer);
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(window.device, indexBuffer);
+        SDL_ReleaseGPUTexture(window.device, texture);
+        how2sdl::quit();
         return 1;
     }
 
@@ -338,50 +298,44 @@ int main(void) {
     SDL_EndGPUCopyPass(copyPass);
     if (!SDL_SubmitGPUCommandBuffer(uploadCmd)) {
         std::cerr << "Failed to submit upload GPU command buffer: " << SDL_GetError() << '\n';
-        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_ReleaseGPUSampler(window.device, sampler);
         SDL_DestroySurface(rgbaSurface);
-        SDL_ReleaseGPUTexture(device, texture);
-        SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_ReleaseGPUBuffer(device, indexBuffer);
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUTexture(window.device, texture);
+        SDL_ReleaseGPUTransferBuffer(window.device, transferBuffer);
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(window.device, indexBuffer);
+        how2sdl::quit();
         return 1;
     }
-    if (!SDL_WaitForGPUIdle(device))
+    if (!SDL_WaitForGPUIdle(window.device))
         std::cerr << "Failed to wait for GPU idle: " << SDL_GetError() << '\n';
-    SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
+    SDL_ReleaseGPUTransferBuffer(window.device, transferBuffer);
 
     //================|
     // Upload end     |
     // Pipeline begin |
     //================|
 
-    SDL_GPUShader* vert = LoadShader(device, "shaders/triangle.vert.spv", SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 2, 0);
-    SDL_GPUShader* frag = LoadShader(device, "shaders/triangle.frag.spv", SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0, 0, 0);
+    SDL_GPUShader* vert = LoadShader(window.device, "shaders/triangle.vert.spv", SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 2, 0);
+    SDL_GPUShader* frag = LoadShader(window.device, "shaders/triangle.frag.spv", SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0, 0, 0);
 
     if (vert == nullptr || frag == nullptr) {
         std::cerr << "Failed to load shaders\n";
 
-        if (vert) SDL_ReleaseGPUShader(device, vert);
-        if (frag) SDL_ReleaseGPUShader(device, frag);
+        if (vert) SDL_ReleaseGPUShader(window.device, vert);
+        if (frag) SDL_ReleaseGPUShader(window.device, frag);
 
-        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_ReleaseGPUSampler(window.device, sampler);
         SDL_DestroySurface(rgbaSurface);
-        SDL_ReleaseGPUTexture(device, texture);
-
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_ReleaseGPUBuffer(device, indexBuffer);
-
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUTexture(window.device, texture);
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(window.device, indexBuffer);
+        how2sdl::quit();
         return 1;
     }
 
     SDL_GPUColorTargetDescription colorTargetDescription{};
-    colorTargetDescription.format = SDL_GetGPUSwapchainTextureFormat(device, window);
+    colorTargetDescription.format = SDL_GetGPUSwapchainTextureFormat(window.device, window.SDLWindow);
 
     SDL_GPUGraphicsPipelineCreateInfo pipelineInfo{};
 
@@ -392,21 +346,19 @@ int main(void) {
     pipelineInfo.target_info.num_color_targets = 1;
     pipelineInfo.target_info.color_target_descriptions = &colorTargetDescription;
 
-    SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(device, &pipelineInfo);
+    SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(window.device, &pipelineInfo);
 
-    SDL_ReleaseGPUShader(device, vert);
-    SDL_ReleaseGPUShader(device, frag);
+    SDL_ReleaseGPUShader(window.device, vert);
+    SDL_ReleaseGPUShader(window.device, frag);
 
     if (pipeline == NULL) {
         std::cerr << "Failed to create graphics pipeline: " << SDL_GetError() << '\n';
-        SDL_ReleaseGPUSampler(device, sampler);
+        SDL_ReleaseGPUSampler(window.device, sampler);
         SDL_DestroySurface(rgbaSurface);
-        SDL_ReleaseGPUTexture(device, texture);
-        SDL_ReleaseGPUBuffer(device, vertexBuffer);
-        SDL_ReleaseGPUBuffer(device, indexBuffer);
-        SDL_DestroyGPUDevice(device);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        SDL_ReleaseGPUTexture(window.device, texture);
+        SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+        SDL_ReleaseGPUBuffer(window.device, indexBuffer);
+        how2sdl::quit();
         return 1;
     }
 
@@ -437,7 +389,7 @@ int main(void) {
         // Get command buffer begin |
         //==========================|
 
-        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
+        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(window.device);
         if (cmd == nullptr) {
             std::cerr << "Failed to acquire gpu command buffer: " << SDL_GetError() << '\n';
             exitCode = 1;
@@ -453,7 +405,7 @@ int main(void) {
         uint32_t width = 0;
         uint32_t height = 0;
 
-        if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmd, window, &swapchainTexture, &width, &height)) {
+        if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmd, window.SDLWindow, &swapchainTexture, &width, &height)) {
             std::cerr << "Failed to acquire gpu swapchain texture: " << SDL_GetError() << '\n';
             SDL_CancelGPUCommandBuffer(cmd);
             exitCode = 1;
@@ -516,20 +468,17 @@ int main(void) {
     // Cleanup begin   |
     //=================|
 
-    SDL_WaitForGPUIdle(device);
+    SDL_WaitForGPUIdle(window.device);
 
     SDL_DestroySurface(rgbaSurface);
-    SDL_ReleaseGPUTexture(device, texture);
-    SDL_ReleaseGPUSampler(device, sampler);
+    SDL_ReleaseGPUTexture(window.device, texture);
+    SDL_ReleaseGPUSampler(window.device, sampler);
 
-    SDL_ReleaseGPUBuffer(device, vertexBuffer);
-    SDL_ReleaseGPUBuffer(device, indexBuffer);
+    SDL_ReleaseGPUBuffer(window.device, vertexBuffer);
+    SDL_ReleaseGPUBuffer(window.device, indexBuffer);
 
-    SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
-    SDL_DestroyGPUDevice(device);
-
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    SDL_ReleaseGPUGraphicsPipeline(window.device, pipeline);
+    how2sdl::quit();
 
     return exitCode;
 }
