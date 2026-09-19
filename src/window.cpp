@@ -1,5 +1,7 @@
 #include "window.hpp"
 
+#include "SDL3_shadercross/SDL_shadercross.h"
+
 #include <iostream>
 
 namespace how2sdl {
@@ -7,9 +9,13 @@ namespace how2sdl {
         if (!SDL_Init(SDL_INIT_VIDEO)) {
             std::cerr << "Failed to init SDL: " << SDL_GetError() << "\n";
         }
+        if (!SDL_ShaderCross_Init()) {
+            std::cerr << "Failed to init SDL shadercross\n";
+        }
     }
 
     void quit() {
+        SDL_ShaderCross_Quit();
         SDL_Quit();
     }
 
@@ -23,7 +29,7 @@ namespace how2sdl {
             std::cerr << "Failed to create window: " << SDL_GetError() << '\n';
         }
 
-        device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, debug, NULL);
+        device = SDL_CreateGPUDevice(SDL_ShaderCross_GetSPIRVShaderFormats(), debug, NULL);
         if (device == nullptr) {
             std::cerr << "Failed to create GPU device: " << SDL_GetError() << '\n';
             release();

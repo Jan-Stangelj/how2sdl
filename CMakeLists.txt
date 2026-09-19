@@ -24,6 +24,19 @@ set(SDLIMAGE_DEPS_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL3IMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
 set(SDL3IMAGE_TESTS OFF CACHE BOOL "" FORCE)
 
+# SDL3_shadercross
+set(SDLSHADERCROSS_SHARED OFF CACHE BOOL "" FORCE)
+set(SDLSHADERCROSS_STATIC ON CACHE BOOL "" FORCE)
+
+set(SDLSHADERCROSS_VENDORED ON CACHE BOOL "" FORCE)
+set(SDLSHADERCROSS_SPIRVCROSS_SHARED OFF CACHE BOOL "" FORCE)
+set(SDLSHADERCROSS_DXC OFF CACHE BOOL "" FORCE)
+
+set(SDLSHADERCROSS_CLI OFF CACHE BOOL "" FORCE)
+set(SDLSHADERCROSS_TESTS OFF CACHE BOOL "" FORCE)
+
+add_subdirectory("vendor/sdl_shadercross" EXCLUDE_FROM_ALL)
+
 add_subdirectory("vendor/sdl_image" EXCLUDE_FROM_ALL)
 
 file(GLOB_RECURSE "SOURCES" CONFIGURE_DEPENDS "src/*.cpp")
@@ -38,12 +51,9 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   target_compile_options(how2sdl PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-
-# hello nigga
-
 target_include_directories("how2sdl" PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
-target_link_libraries("how2sdl" PRIVATE SDL3::SDL3-static SDL3_image::SDL3_image-static)
+target_link_libraries("how2sdl" PRIVATE SDL3::SDL3-static SDL3_image::SDL3_image-static SDL3_shadercross::SDL3_shadercross-static)
 
 # Compile the shaders
 find_program(GLSLC glslc REQUIRED)

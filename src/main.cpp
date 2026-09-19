@@ -3,6 +3,8 @@
 
 #include "SDL3_image/SDL_image.h"
 
+#include "SDL3_shadercross/SDL_shadercross.h"
+
 #include "window.hpp"
 
 #include <cstdint>
@@ -14,14 +16,10 @@ struct vertex {
     float pad[2] = {0.0f, 0.0f};
 };
 
-SDL_GPUShader* LoadShader(
+SDL_GPUShader* loadShader(
     SDL_GPUDevice *device,
     const char *filename,
-    SDL_GPUShaderStage stage,
-    Uint32 num_samplers,
-    Uint32 num_storage_textures,
-    Uint32 num_storage_buffers,
-    Uint32 num_uniform_buffers) {
+    SDL_ShaderCross_ShaderStage stage) {
 
     size_t size = 0;
 
@@ -31,25 +29,29 @@ SDL_GPUShader* LoadShader(
         return nullptr;
     }
 
-    SDL_GPUShaderCreateInfo info{};
-    info.code = (const Uint8 *)code;
-    info.code_size = size;
+    SDL_ShaderCross_SPIRV_Info info{};
+    info.bytecode = (const unsigned char*)code;
+    info.bytecode_size = size;
     info.entrypoint = "main";
-    info.format = SDL_GPU_SHADERFORMAT_SPIRV;
-    info.stage = stage;
+    info.shader_stage = stage;
 
-    info.num_samplers = num_samplers;
-    info.num_storage_textures = num_storage_textures;
-    info.num_storage_buffers = num_storage_buffers;
-    info.num_uniform_buffers = num_uniform_buffers;
-
-    SDL_GPUShader *shader = SDL_CreateGPUShader(device, &info);
-    if (shader == NULL) {
-        std::cerr << "Failed to create GPU shader: " << SDL_GetError() << '\n';
+    // reflection: counts + vertex I/O
+    SDL_ShaderCross_GraphicsShaderMetadata* meta = SDL_ShaderCross_ReflectGraphicsSPIRV((const unsigned char*)code, size, 0);
+    if (meta == NULL) {
+        std::cerr << "Failed to reflect shader metadata\n";
         SDL_free(code);
         return nullptr;
     }
 
+    SDL_GPUShader *shader = SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(device, &info, &meta->resource_info, 0);
+    if (shader == NULL) {
+        std::cerr << "Failed to create GPU shader: " << SDL_GetError() << '\n';
+        SDL_free(meta);
+        SDL_free(code);
+        return nullptr;
+    }
+
+    SDL_free(meta);
     SDL_free(code);
 
     return shader;
@@ -316,8 +318,8 @@ int main(void) {
     // Pipeline begin |
     //================|
 
-    SDL_GPUShader* vert = LoadShader(window.device, "shaders/triangle.vert.spv", SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 2, 0);
-    SDL_GPUShader* frag = LoadShader(window.device, "shaders/triangle.frag.spv", SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0, 0, 0);
+    SDL_GPUShader* vert = loadShader(window.device, "shaders/triangle.vert.spv", SDL_SHADERCROSS_SHADERSTAGE_VERTEX);
+    SDL_GPUShader* frag = loadShader(window.device, "shaders/triangle.frag.spv", SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT);
 
     if (vert == nullptr || frag == nullptr) {
         std::cerr << "Failed to load shaders\n";
